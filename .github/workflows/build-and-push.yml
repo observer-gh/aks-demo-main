@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./client
+        working-directory: ./frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
