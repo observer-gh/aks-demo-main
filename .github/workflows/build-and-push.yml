@@ -1,0 +1,58 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure Container Registry (ACR)
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push Docker image to ACR
+        run: |
+          docker build -t ${{secrets.ACR_LOGIN_SERVER }}/tk-backend:${{ github.sha }} \
+            -t ${{secrets.ACR_LOGIN_SERVER }}/tk-backend:latest .
+          docker push ${{secrets.ACR_LOGIN_SERVER }}/tk-backend:${{ github.sha }}
+          docker push ${{secrets.ACR_LOGIN_SERVER }}/tk-backend:latest
+
+  build-client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./client
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure Container Registry (ACR)
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push Docker image to ACR
+        run: |
+          docker build -t ${{secrets.ACR_LOGIN_SERVER }}/tk-frontend:${{ github.sha }} \
+            -t ${{secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest .
+          docker push ${{secrets.ACR_LOGIN_SERVER }}/tk-frontend:${{ github.sha }}
+          docker push ${{secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest
