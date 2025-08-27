@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: giglepeople/aks-test-app-backend:latest
+        # imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MYSQL_HOST
+          value: "my-mariadb"
+        - name: MYSQL_USER
+          value: "testuser"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: MYSQL_PASSWORD
+        - name: REDIS_HOST
+          value: "my-redis-master"
+        - name: KAFKA_SERVERS
+          value: "my-kafka:9092"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: REDIS_PASSWORD
+        - name: KAFKA_USERNAME
+          value: "user1"
+        - name: KAFKA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: KAFKA_PASSWORD
+        - name: FLASK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: FLASK_SECRET_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+  - port: 5000
+    targetPort: 5000 

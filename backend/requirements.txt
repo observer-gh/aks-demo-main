@@ -1,0 +1,6 @@
+flask
+flask-cors
+redis
+kafka-python
+mysql-connector-python
+werkzeug 
