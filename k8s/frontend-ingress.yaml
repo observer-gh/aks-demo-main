@@ -9,7 +9,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: tk-frontend.local # Change this to your domain
+    - host: tk.20.249.107.37.nip.io
       http:
         paths:
           - path: /

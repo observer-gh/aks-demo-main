@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: tk-frontend:latest
-          imagePullPolicy: Never
+          image: ktech4.azurecr.io/tk-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
           resources:

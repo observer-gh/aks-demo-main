@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: tk-backend:latest
-          imagePullPolicy: Never
+          image: ktech4.azurecr.io/tk-backend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
           resources:
@@ -42,9 +42,20 @@ spec:
             - name: MYSQL_DATABASE
               value: "my_database"
             - name: REDIS_HOST
-              value: "my-redis-master.tk.svc.cluster.local"
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: REDIS_HOST
             - name: KAFKA_SERVERS
-              value: "my-kafka.tk.svc.cluster.local:9092"
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: KAFKA_SERVERS
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: REDIS_PORT
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -62,6 +73,19 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: FLASK_SECRET_KEY
+            # OpenTelemetry Configuration
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otelcol.tk.svc.cluster.local:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_SERVICE_NAME
+              value: "tk-backend"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=dev,service.version=1.0.0"
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_traceidratio"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "1.0"
 ---
 apiVersion: v1
 kind: Service
