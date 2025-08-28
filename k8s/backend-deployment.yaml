@@ -13,12 +13,10 @@ spec:
       labels:
         app: backend
     spec:
-      imagePullSecrets:
-        - name: acr-registry
       containers:
         - name: backend
-          image: ktech4.azurecr.io/tk-backend:latest
-          imagePullPolicy: Always
+          image: tk-backend:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 5000
           resources:
@@ -32,16 +30,21 @@ spec:
             - name: MYSQL_HOST
               value: "tk-mariadb.tk.svc.cluster.local"
             - name: MYSQL_USER
-              value: "testuser"
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MYSQL_USER
             - name: MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: backend-secrets
                   key: MYSQL_PASSWORD
+            - name: MYSQL_DATABASE
+              value: "my_database"
             - name: REDIS_HOST
-              value: "redis-master.default.svc.cluster.local"
+              value: "my-redis-master.tk.svc.cluster.local"
             - name: KAFKA_SERVERS
-              value: "my-kafka:9092"
+              value: "my-kafka.tk.svc.cluster.local:9092"
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:

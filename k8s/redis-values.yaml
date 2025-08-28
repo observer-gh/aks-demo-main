@@ -1,0 +1,25 @@
+architecture: standalone
+auth:
+  enabled: true
+  sentinel: false
+  password: "MyFixedRedisPass123!"
+
+master:
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+service:
+  type: ClusterIP
+  master:
+    port: 6379
+
+nameOverride: "my-redis"
+fullnameOverride: "my-redis"
