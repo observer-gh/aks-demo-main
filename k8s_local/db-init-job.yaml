@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init-job
+  namespace: tk
+spec:
+  template:
+    spec:
+      containers:
+        - name: db-init
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tk-mariadb
+                  key: mariadb-root-password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for MariaDB to be ready..."
+              while ! mysql -h tk-mariadb -u root -p$MYSQL_ROOT_PASSWORD -e "SELECT 1" >/dev/null 2>&1; do
+                echo "MariaDB not ready yet, waiting..."
+                sleep 5
+              done
+              echo "MariaDB is ready! Initializing database..."
+
+              mysql -h tk-mariadb -u root -p$MYSQL_ROOT_PASSWORD my_database < /init-script/init.sql
+
+              echo "Database initialization completed!"
+          volumeMounts:
+            - name: init-script
+              mountPath: /init-script
+      volumes:
+        - name: init-script
+          configMap:
+            name: db-init-script
+      restartPolicy: Never
+  backoffLimit: 3

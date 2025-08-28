@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: tk
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: tk-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5000
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          env:
+            - name: MYSQL_HOST
+              value: "tk-mariadb.tk.svc.cluster.local"
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_DATABASE
+              value: "my_database"
+            - name: REDIS_HOST
+              value: "my-redis-master.tk.svc.cluster.local"
+            - name: KAFKA_SERVERS
+              value: "my-kafka.tk.svc.cluster.local:9092"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: REDIS_PASSWORD
+            - name: KAFKA_USERNAME
+              value: "user1"
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: KAFKA_PASSWORD
+            - name: FLASK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: FLASK_SECRET_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: tk
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - port: 5000
+      targetPort: 5000
