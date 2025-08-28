@@ -1,11 +1,16 @@
-name: Build and Push Docker Images
+name: Build, Scan, Push
 
 on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write # for trivy
+  packages: write # for pushing images to ACR
+
 jobs:
-  build-backend:
+  backend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -17,20 +22,42 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Azure Container Registry (ACR)
+      - name: Build (load into local daemon)
+        run: |
+          docker buildx build \
+            --load \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:latest \
+            .
+
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:latest
+          format: "sarif"
+          output: "trivy-backend.sarif"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1" # fail the job if findings
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend.sarif
+
+      - name: Login ACR
         uses: azure/docker-login@v1
         with:
           login-server: ${{ secrets.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build and push Docker image to ACR
+      - name: Push
         run: |
-          docker buildx build --push \
-            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:${{ github.sha }} \
-            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:latest .
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:${{ github.sha }}
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:latest
 
-  build-frontend:
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,18 +66,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Azure Container Registry (ACR)
+      - name: Build (load into local daemon)
+        run: |
+          docker buildx build \
+            --load \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest \
+            .
+
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest
+          format: "sarif"
+          output: "trivy-frontend.sarif"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1" # fail the job if findings
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend.sarif
+
+      - name: Login ACR
         uses: azure/docker-login@v1
         with:
           login-server: ${{ secrets.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build and push Docker image to ACR
+      - name: Push
         run: |
-          docker buildx build --push \
-            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:${{ github.sha }} \
-            -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest .
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:${{ github.sha }}
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest
