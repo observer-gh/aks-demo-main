@@ -3,4 +3,13 @@ flask-cors
 redis
 kafka-python
 mysql-connector-python
-werkzeug 
+werkzeug
+opentelemetry-distro
+opentelemetry-exporter-otlp
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+opentelemetry-instrumentation-flask
+opentelemetry-instrumentation-mysql
+opentelemetry-instrumentation-redis
+opentelemetry-instrumentation-logging 

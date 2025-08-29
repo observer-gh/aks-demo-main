@@ -62,6 +62,26 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: FLASK_SECRET_KEY
+            # OpenTelemetry Configuration
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: "http://collector.lgtm.20.249.154.255.nip.io/v1/traces"
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: "http://collector.lgtm.20.249.154.255.nip.io/v1/metrics"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            - name: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+              value: "http://collector.lgtm.20.249.154.255.nip.io/v1/logs"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_SERVICE_NAME
+              value: "tk-backend"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=dev,service.version=1.0.0"
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_traceidratio"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "1.0"
+
 ---
 apiVersion: v1
 kind: Service

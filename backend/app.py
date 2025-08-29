@@ -9,11 +9,105 @@ from kafka import KafkaProducer, KafkaConsumer
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from threading import Thread
+import logging
+from random import randint
+
+# OpenTelemetry imports
+from opentelemetry import trace, metrics
+from opentelemetry.sdk.resources import Resource
+
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+
+# ---- LOGS (manual) ----
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+# -----------------------
+
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.mysql import MySQLInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # 세션을 위한 credentials 지원
-app.secret_key = os.getenv(
-    'FLASK_SECRET_KEY', 'your-secret-key-here')  # 세션을 위한 시크릿 키
+CORS(app, supports_credentials=True)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def setup_opentelemetry():
+    # shared resource (ensure service.name set even if env not provided)
+    resource = Resource.create({
+        "service.name": os.getenv("OTEL_SERVICE_NAME", "tk-backend")
+    })
+
+    # ---- Traces ----
+    trace.set_tracer_provider(TracerProvider(resource=resource))
+    trace.get_tracer_provider().add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter())  # uses env endpoints
+    )
+
+    # ---- Metrics ----
+    metrics.set_meter_provider(MeterProvider(
+        resource=resource,
+        metric_readers=[PeriodicExportingMetricReader(OTLPMetricExporter())]
+    ))
+
+    # ---- Logs (manual, no agent) ----
+    logger_provider = LoggerProvider(resource=resource)
+    set_logger_provider(logger_provider)
+    logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter())  # uses env endpoint
+    )
+    # inject trace_id/span_id into stdlib logs
+    LoggingInstrumentor().instrument(set_logging_format=True)
+    # bridge stdlib logging -> OTEL logs
+    root = logging.getLogger()
+    root.addHandler(LoggingHandler(level=logging.INFO,
+                    logger_provider=logger_provider))
+
+    # (optional) visibility
+    logger.info("OTLP traces -> %s",
+                os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))
+    logger.info("OTLP metrics -> %s",
+                os.getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"))
+    logger.info("OTLP logs   -> %s",
+                os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"))
+
+
+# Initialize OpenTelemetry
+setup_opentelemetry()
+
+# Setup instrumentation
+FlaskInstrumentor().instrument_app(app)
+MySQLInstrumentor().instrument()
+RedisInstrumentor().instrument()
+
+# Acquire tracer and meter
+tracer = trace.get_tracer("tk-backend.tracer")
+meter = metrics.get_meter("tk-backend.meter")
+
+# Create counter instrument for API calls
+api_counter = meter.create_counter(
+    "api.calls",
+    description="The number of API calls by endpoint and method",
+)
+
+# Create counter instrument for database operations
+db_counter = meter.create_counter(
+    "db.operations",
+    description="The number of database operations by type",
+)
 
 # # 스레드 풀 생성
 # thread_pool = ThreadPoolExecutor(max_workers=5)
@@ -112,26 +206,45 @@ def login_required(f):
 @app.route('/db/message', methods=['POST'])
 @login_required
 def save_to_db():
-    try:
-        user_id = session['user_id']
-        db = get_db_connection()
-        data = request.json
-        cursor = db.cursor()
-        sql = "INSERT INTO messages (message, created_at) VALUES (%s, %s)"
-        cursor.execute(sql, (data['message'], datetime.now()))
-        db.commit()
-        cursor.close()
-        db.close()
+    with tracer.start_as_current_span("save_message") as span:
+        try:
+            user_id = session['user_id']
+            span.set_attribute("user.id", user_id)
 
-        # 로깅
-        log_to_redis('db_insert', f"Message saved: {data['message'][:30]}...")
+            db = get_db_connection()
+            data = request.json
+            message = data['message']
+            span.set_attribute("message.length", len(message))
 
-        async_log_api_stats('/db/message', 'POST', 'success', user_id)
-        return jsonify({"status": "success"})
-    except Exception as e:
-        async_log_api_stats('/db/message', 'POST', 'error', user_id)
-        log_to_redis('db_insert_error', str(e))
-        return jsonify({"status": "error", "message": str(e)}), 500
+            cursor = db.cursor()
+            sql = "INSERT INTO messages (message, created_at) VALUES (%s, %s)"
+            cursor.execute(sql, (message, datetime.now()))
+            db.commit()
+            cursor.close()
+            db.close()
+
+            # Increment counters
+            api_counter.add(1, {"endpoint": "/db/message",
+                            "method": "POST", "status": "success"})
+            db_counter.add(1, {"operation": "insert", "table": "messages"})
+
+            # 로깅
+            log_to_redis('db_insert', f"Message saved: {message[:30]}...")
+            logger.info(f"User {user_id} saved message: {message[:30]}...")
+
+            async_log_api_stats('/db/message', 'POST', 'success', user_id)
+            return jsonify({"status": "success"})
+        except Exception as e:
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(e))
+
+            api_counter.add(1, {"endpoint": "/db/message",
+                            "method": "POST", "status": "error"})
+            logger.error(f"Error saving message: {str(e)}")
+
+            async_log_api_stats('/db/message', 'POST', 'error', user_id)
+            log_to_redis('db_insert_error', str(e))
+            return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/db/messages', methods=['GET'])
@@ -211,49 +324,68 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    try:
-        data = request.json
-        username = data.get('username')
-        password = data.get('password')
+    with tracer.start_as_current_span("login") as span:
+        try:
+            data = request.json
+            username = data.get('username')
+            password = data.get('password')
 
-        if not username or not password:
-            return jsonify({"status": "error", "message": "사용자명과 비밀번호는 필수입니다"}), 400
+            span.set_attribute("user.username", username)
 
-        db = get_db_connection()
-        cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        cursor.close()
-        db.close()
+            if not username or not password:
+                api_counter.add(
+                    1, {"endpoint": "/login", "method": "POST", "status": "error"})
+                return jsonify({"status": "error", "message": "사용자명과 비밀번호는 필수입니다"}), 400
 
-        if user and check_password_hash(user['password'], password):
-            session['user_id'] = username  # 세션에 사용자 정보 저장
+            db = get_db_connection()
+            cursor = db.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT * FROM users WHERE username = %s", (username,))
+            user = cursor.fetchone()
+            cursor.close()
+            db.close()
 
-            # Redis 세션 저장 (선택적)
-            try:
-                redis_client = get_redis_connection()
-                session_data = {
-                    'user_id': username,
-                    'login_time': datetime.now().isoformat()
-                }
-                redis_client.set(
-                    f"session:{username}", json.dumps(session_data))
-                redis_client.expire(f"session:{username}", 3600)
-            except Exception as redis_error:
-                print(f"Redis session error: {str(redis_error)}")
-                # Redis 오류는 무시하고 계속 진행
+            db_counter.add(1, {"operation": "select", "table": "users"})
 
-            return jsonify({
-                "status": "success",
-                "message": "로그인 성공",
-                "username": username
-            })
+            if user and check_password_hash(user['password'], password):
+                session['user_id'] = username
 
-        return jsonify({"status": "error", "message": "잘못된 인증 정보"}), 401
+                # Redis 세션 저장
+                try:
+                    redis_client = get_redis_connection()
+                    session_data = {
+                        'user_id': username,
+                        'login_time': datetime.now().isoformat()
+                    }
+                    redis_client.set(
+                        f"session:{username}", json.dumps(session_data))
+                    redis_client.expire(f"session:{username}", 3600)
+                except Exception as redis_error:
+                    logger.warning(f"Redis session error: {str(redis_error)}")
 
-    except Exception as e:
-        print(f"Login error: {str(e)}")  # 서버 로그에 에러 출력
-        return jsonify({"status": "error", "message": "로그인 처리 중 오류가 발생했습니다"}), 500
+                api_counter.add(
+                    1, {"endpoint": "/login", "method": "POST", "status": "success"})
+                logger.info(f"User {username} logged in successfully")
+
+                return jsonify({
+                    "status": "success",
+                    "message": "로그인 성공",
+                    "username": username
+                })
+
+            api_counter.add(
+                1, {"endpoint": "/login", "method": "POST", "status": "error"})
+            logger.warning(f"Failed login attempt for user: {username}")
+            return jsonify({"status": "error", "message": "잘못된 인증 정보"}), 401
+
+        except Exception as e:
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(e))
+
+            api_counter.add(
+                1, {"endpoint": "/login", "method": "POST", "status": "error"})
+            logger.error(f"Login error: {str(e)}")
+            return jsonify({"status": "error", "message": "로그인 처리 중 오류가 발생했습니다"}), 500
 
 # 로그아웃 엔드포인트
 
