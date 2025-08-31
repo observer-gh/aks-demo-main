@@ -26,6 +26,7 @@ jobs:
         run: |
           docker buildx build \
             --load \
+            -t tk-backend:latest \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:${{ github.sha }} \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:latest \
             .
@@ -72,6 +73,7 @@ jobs:
         run: |
           docker buildx build \
             --load \
+            -t tk-frontend:latest \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:${{ github.sha }} \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest \
             .
