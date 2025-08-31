@@ -3,7 +3,7 @@ flask
 flask-cors>=6
 redis
 kafka-python
-mysql-connector-python==9
+mysql-connector-python==9.1
 werkzeug
 opentelemetry-distro
 opentelemetry-exporter-otlp
