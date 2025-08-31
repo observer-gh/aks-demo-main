@@ -13,6 +13,8 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+        - name: acr-registry
       containers:
         - name: frontend
           image: ktech4.azurecr.io/tk-frontend:latest
@@ -39,4 +41,3 @@ spec:
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30080

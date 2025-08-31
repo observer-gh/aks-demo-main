@@ -67,40 +67,53 @@ else
     print_status "Namespace tk already exists"
 fi
 
-# Section 3: Deploy Redis
-print_status "Deploying Redis cluster..."
+# Section 3: Check Redis in default namespace
+print_status "Checking Redis cluster in default namespace..."
 
-# Check if Redis already exists
-if helm list -n tk | grep -q "my-redis"; then
-    print_warning "Redis cluster already exists, skipping deployment"
-else
-    helm install my-redis bitnami/redis -f k8s/redis-values.yaml -n tk
-    print_status "Waiting for Redis pods to be ready..."
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=my-redis -n tk --timeout=300s
+# Check if Redis service exists
+if ! kubectl get svc redis-master -n default &> /dev/null; then
+    print_error "Redis service not found in default namespace. Please deploy Redis first."
+    exit 1
 fi
 
-print_status "Redis cluster deployed successfully!"
-
-# Section 4: Deploy Kafka
-print_status "Deploying Kafka cluster..."
-
-# Check if Kafka already exists
-if helm list -n tk | grep -q "my-kafka"; then
-    print_warning "Kafka cluster already exists, skipping deployment"
-else
-    helm install my-kafka bitnami/kafka -f k8s/kafka-values.yaml -n tk
-    print_status "Waiting for Kafka pods to be ready..."
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=my-kafka -n tk --timeout=300s
+# Check if Redis pods are ready
+if ! kubectl wait -n default --for=condition=ready pod -l app.kubernetes.io/name=redis --timeout=30s &> /dev/null; then
+    print_error "Redis cluster is not ready. Please ensure Redis is running and ready."
+    exit 1
 fi
 
-print_status "Kafka cluster deployed successfully!"
+print_status "Redis cluster is ready!"
+
+# Section 4: Check Kafka in default namespace
+print_status "Checking Kafka cluster in default namespace..."
+
+# Check if Kafka service exists
+print_status "Checking Kafka service..."
+if ! kubectl get svc team-kafka -n default &> /dev/null; then
+    print_error "Kafka service not found in default namespace. Please deploy Kafka first."
+    exit 1
+fi
+print_status "Kafka service found"
+
+# Check if Kafka pods are ready
+print_status "Checking Kafka pods..."
+kubectl get pods -n default -l app.kubernetes.io/name=kafka
+print_status "Running kubectl wait command..."
+if ! kubectl wait -n default --for=condition=ready pod -l app.kubernetes.io/name=kafka --timeout=60s &> /dev/null; then
+    print_error "Kafka cluster is not ready. Please ensure Kafka is running and ready."
+    print_status "Debug: Checking pod status again..."
+    kubectl get pods -n default -l app.kubernetes.io/name=kafka
+    exit 1
+fi
+
+print_status "Kafka cluster is ready!"
 
 # Section 5: Deploy MariaDB
 print_status "Deploying basic MariaDB..."
 
 # Check if MariaDB already exists
-if kubectl get deployment tk-mariadb -n tk &> /dev/null; then
-    print_warning "MariaDB deployment already exists, skipping deployment"
+if kubectl get svc tk-mariadb -n tk &> /dev/null; then
+    print_warning "MariaDB already exists, skipping deployment"
 else
     helm install tk-mariadb bitnami/mariadb -f k8s/mariadb-values.yaml -n tk
     print_status "Waiting for MariaDB pods to be ready..."

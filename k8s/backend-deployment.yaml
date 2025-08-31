@@ -13,6 +13,8 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+        - name: acr-registry
       containers:
         - name: backend
           image: ktech4.azurecr.io/tk-backend:latest
@@ -69,10 +71,7 @@ spec:
                   name: backend-secrets
                   key: KAFKA_PASSWORD
             - name: FLASK_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: backend-secrets
-                  key: FLASK_SECRET_KEY
+              value: "default-secret-key"
             # OpenTelemetry Configuration
             - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
               value: "http://collector.lgtm.20.249.154.255.nip.io/v1/traces"
