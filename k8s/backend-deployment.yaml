@@ -74,8 +74,14 @@ spec:
                   name: backend-secrets
                   key: FLASK_SECRET_KEY
             # OpenTelemetry Configuration
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://otelcol.tk.svc.cluster.local:4318"
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: "http://collector.lgtm.20.249.154.255.nip.io/v1/traces"
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: "http://collector.lgtm.20.249.154.255.nip.io/v1/metrics"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            - name: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+              value: "http://collector.lgtm.20.249.154.255.nip.io/v1/logs"
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: "http/protobuf"
             - name: OTEL_SERVICE_NAME
