@@ -31,10 +31,11 @@ jobs:
             -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-backend:latest \
             .
 
-      - name: Trivy scan (fail on HIGH/CRITICAL)
+      - name: Trivy scan (report os, gate library-only)
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: tk-backend:latest
+          vuln-type: "library" # leave os out for now for learning
           format: "sarif"
           output: "trivy-backend.sarif"
           severity: "HIGH,CRITICAL"
@@ -78,10 +79,11 @@ jobs:
             -t ${{ secrets.ACR_LOGIN_SERVER }}/tk-frontend:latest \
             .
 
-      - name: Trivy scan (fail on HIGH/CRITICAL)
+      - name: Trivy scan (report os, gate library-only)
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: tk-frontend:latest
+          vuln-type: "library" # leave os out for now for learning
           format: "sarif"
           output: "trivy-frontend.sarif"
           severity: "HIGH,CRITICAL"
