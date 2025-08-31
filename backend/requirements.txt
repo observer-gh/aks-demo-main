@@ -1,8 +1,9 @@
+setuptools>=78
 flask
-flask-cors
+flask-cors>=6
 redis
 kafka-python
-mysql-connector-python
+mysql-connector-python==9
 werkzeug
 opentelemetry-distro
 opentelemetry-exporter-otlp
