@@ -145,7 +145,7 @@ def get_redis_connection():
                 retry_on_timeout=True
             )
             # Test the connection
-            redis_client.ping()
+            # redis_client.ping()
             return redis_client
         except Exception as e:
             if attempt < max_retries - 1:
