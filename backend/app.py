@@ -91,7 +91,7 @@ setup_opentelemetry()
 # Setup instrumentation
 FlaskInstrumentor().instrument_app(app)
 MySQLInstrumentor().instrument()
-RedisInstrumentor().instrument()
+# RedisInstrumentor().instrument()  # Temporarily disabled for Redis connection testing
 
 # Acquire tracer and meter
 tracer = trace.get_tracer("tk-backend.tracer")
