@@ -136,7 +136,7 @@ def get_redis_connection():
         try:
 
             redis_client = redis.Redis(
-                host=os.getenv('REDIS_HOST', 'my-redis-master'),
+                host=os.getenv('REDIS_HOST', 'my-redis-master').strip(),
                 port=int(os.getenv('REDIS_PORT', 6379)),
                 password=os.getenv('REDIS_PASSWORD', '').strip(),
                 decode_responses=True,
