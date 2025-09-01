@@ -128,13 +128,34 @@ def get_db_connection():
 
 
 def get_redis_connection():
-    return redis.Redis(
-        host=os.getenv('REDIS_HOST', 'my-redis-master'),
-        port=int(os.getenv('REDIS_PORT', 6379)),
-        password=os.getenv('REDIS_PASSWORD'),
-        decode_responses=True,
-        db=0
-    )
+    import time
+    max_retries = 3
+    retry_delay = 2
+
+    for attempt in range(max_retries):
+        try:
+            redis_client = redis.Redis(
+                host=os.getenv('REDIS_HOST', 'my-redis-master'),
+                port=int(os.getenv('REDIS_PORT', 6379)),
+                password=os.getenv('REDIS_PASSWORD'),
+                decode_responses=True,
+                db=0,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry_on_timeout=True
+            )
+            # Test the connection
+            redis_client.ping()
+            return redis_client
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(
+                    f"Redis connection attempt {attempt + 1} failed: {str(e)}. Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print(
+                    f"Redis connection failed after {max_retries} attempts: {str(e)}")
+                raise e
 
 # Kafka Producer 설정
 
