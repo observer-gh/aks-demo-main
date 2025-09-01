@@ -134,10 +134,11 @@ def get_redis_connection():
 
     for attempt in range(max_retries):
         try:
+
             redis_client = redis.Redis(
                 host=os.getenv('REDIS_HOST', 'my-redis-master'),
                 port=int(os.getenv('REDIS_PORT', 6379)),
-                password=os.getenv('REDIS_PASSWORD'),
+                password=os.getenv('REDIS_PASSWORD', '').strip(),
                 decode_responses=True,
                 db=0,
                 socket_connect_timeout=5,
