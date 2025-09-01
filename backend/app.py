@@ -130,7 +130,7 @@ def get_db_connection():
 def get_redis_connection():
     return redis.Redis(
         host=os.getenv('REDIS_HOST', 'my-redis-master'),
-        port=6379,
+        port=int(os.getenv('REDIS_PORT', 6379)),
         password=os.getenv('REDIS_PASSWORD'),
         decode_responses=True,
         db=0
@@ -274,13 +274,35 @@ def get_from_db():
 
 @app.route('/logs/redis', methods=['GET'])
 def get_redis_logs():
-    try:
-        redis_client = get_redis_connection()
-        logs = redis_client.lrange('api_logs', 0, -1)
-        redis_client.close()
-        return jsonify([json.loads(log) for log in logs])
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    with tracer.start_as_current_span("get_redis_logs") as span:
+        try:
+            redis_client = get_redis_connection()
+
+            # optional: check key type & length
+            key_type = redis_client.type('api_logs')
+            span.set_attribute("redis.key_type", key_type)
+            total = redis_client.llen('api_logs') or 0
+            span.set_attribute("redis.len", total)
+
+            # fetch most recent 100
+            raw = redis_client.lrange('api_logs', -100, -1) or []
+
+            out = []
+            for item in raw:
+                try:
+                    out.append(json.loads(item))
+                except Exception:
+                    out.append({"raw": item})  # keep it, don’t crash
+
+            # newest first
+            out.reverse()
+
+            return jsonify(out)
+        except Exception as e:
+            logger.exception("redis logs error")
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(e))
+            return jsonify({"status": "error", "message": str(e)}), 500
 
 # 회원가입 엔드포인트
 
