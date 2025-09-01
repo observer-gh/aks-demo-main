@@ -4,12 +4,12 @@ metadata:
   name: frontend-ingress
   namespace: tk
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod # optional, if using TLS via cert-manager
+    nginx.ingress.kubernetes.io/ssl-redirect: "false" # or "true" if you enable TLS
 spec:
-  ingressClassName: nginx
+  ingressClassName: webapprouting.kubernetes.azure.com # <-- use the class you saw
   rules:
-    - host: tk.20.249.107.37.nip.io
+    - host: tk.20.249.180.207.nip.io
       http:
         paths:
           - path: /
